@@ -1,0 +1,955 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>ステージ攻略アニメブラウザゲーム</title>
+    <style>
+        /* 全体スタイル */
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body { font-family: 'Helvetica Neue', Arial, sans-serif; background: #111; color: #fff; overflow: hidden; width: 100vw; height: 100vh; display: flex; justify-content: center; align-items: center; transition: font-family 0.3s ease; }
+        #game-container { width: 100%; height: 100%; max-width: 480px; max-height: 854px; background: #222; position: relative; overflow: hidden; border: 2px solid #444; }
+        
+        /* 共通ボタン */
+        button { padding: 12px 24px; font-size: 16px; font-weight: bold; background: #ff4757; color: white; border: none; border-radius: 8px; cursor: pointer; box-shadow: 0 4px #ff6b81; }
+        button:active { transform: translateY(2px); box-shadow: 0 2px #ff6b81; }
+        button:disabled { background: #555; box-shadow: none; color: #888; cursor: not-allowed; }
+
+        /* 各種画面の管理 */
+        .screen { width: 100%; height: 100%; position: absolute; top: 0; left: 0; display: none; flex-direction: column; justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; background-size: cover; background-position: center; background-repeat: no-repeat; }
+        .screen.active { display: flex; }
+
+        /* 起動ロゴ画面の調整 */
+        #logo-screen { background: #000; padding: 0; position: relative; }
+        .logo-display-img { width: 100%; height: 100%; object-fit: contain; }
+
+        /* タイトル画面の調整 */
+        #title-screen { padding: 0; position: relative; }
+        .title-bg-img { width: 100%; height: 100%; object-fit: cover; position: absolute; top: 0; left: 0; z-index: 1; }
+        .title-start-btn { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); z-index: 2; font-size: 20px; padding: 15px 40px; letter-spacing: 2px; }
+
+        /* あらすじ画面用スタイル */
+        #prologue-screen { background-color: #000; justify-content: space-between; padding: 30px 20px; }
+        .prologue-title { font-size: 20px; font-weight: bold; color: #ff6b81; border-bottom: 2px solid #ff4757; width: 100%; text-align: center; padding-bottom: 8px; margin-top: 10px; }
+        .prologue-text-box { width: 100%; flex: 1; display: flex; justify-content: center; align-items: center; padding: 10px; }
+        .prologue-text { font-size: 15px; line-height: 1.8; text-shadow: 0 2px 4px rgba(0,0,0,0.9); text-align: left; width: 100%; white-space: pre-wrap; }
+
+        /* 操作説明画面用スタイル */
+        #tutorial-screen { background-color: #1e272e; justify-content: flex-start; padding: 20px; overflow-y: auto; }
+        .tutorial-title { font-size: 22px; font-weight: bold; color: #ffd32a; text-shadow: 0 2px 4px rgba(0,0,0,0.5); margin-top: 10px; margin-bottom: 25px; }
+        .tutorial-list { width: 100%; display: flex; flex-direction: column; gap: 15px; flex: 1; }
+        .tutorial-item { background: rgba(0, 0, 0, 0.6); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 12px; }
+        .tutorial-item-header { font-size: 15px; font-weight: bold; color: #ff4757; margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
+        .tutorial-item-desc { font-size: 12.5px; line-height: 1.5; color: #dcdde1; }
+
+        /* キャラクター選択画面 */
+        #char-select-screen { justify-content: flex-start; }
+        #char-list { width: 100%; height: auto; display: flex; flex-direction: column; justify-content: center; align-items: center; }
+        #char-select-main-row { width: 100%; display: flex; flex-direction: row; justify-content: center; align-items: stretch; gap: 10px; margin-bottom: 20px; }
+
+        /* 大型キャラクターボタン */
+        .char-select-btn { 
+            flex: 0 1 48%; background-color: #2f3542 !important; opacity: 1 !important; border: 2px solid #535c68; border-radius: 12px; padding: 5px; text-align: center; display: flex; flex-direction: column; align-items: center; color: white; transition: transform 0.2s, border-color 0.2s; cursor: pointer; box-shadow: 0 6px 12px rgba(0,0,0,0.6); overflow: hidden; 
+        }
+        .char-select-btn:active { transform: scale(0.98); }
+        .char-select-btn-img { width: 100%; aspect-ratio: 4/5; background: rgba(0, 0, 0, 0.4); border-radius: 8px; margin-bottom: 6px; object-fit: contain; display: block; }
+        .char-select-btn-info { display: flex; flex-direction: column; align-items: center; width: 100%; padding: 2px 4px 4px 4px; }
+        .char-select-btn-name { font-size: 15px; font-weight: bold; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; color: #fff; }
+        .char-select-btn-hp { font-size: 11px; color: #a4b0be; margin-bottom: 4px; }
+        .char-select-btn-hint { font-size: 11px; color: #ff4757; font-weight: bold; letter-spacing: 0.5px; }
+
+        /* EXステージボタン */
+        #ex-select-btn-row { width: 100%; display: flex; justify-content: center; align-items: center; }
+        .ex-select-btn { width: 98%; background-color: #1e1e1e !important; opacity: 1 !important; border: 2px solid #ffd32a; border-radius: 10px; padding: 12px 15px; color: white; display: flex; flex-direction: row; align-items: center; box-shadow: 0 4px 10px rgba(255, 211, 42, 0.2); cursor: pointer; }
+        .ex-select-btn-icon { font-size: 22px; color: #ffd32a; margin-right: 12px; }
+        .ex-select-btn-text { display: flex; flex-direction: column; flex: 1; }
+        .ex-select-btn-name { font-size: 15px; font-weight: bold; margin-bottom: 2px; }
+        .ex-select-btn-hint { font-size: 11px; color: #ffd32a; }
+
+        /* バトルメイン画面 */
+        #battle-screen { justify-content: space-between; padding: 10px; transition: background 0.5s; }
+        #stage-info { width: 100%; text-align: center; font-size: 18px; font-weight: bold; padding: 5px; background: rgba(0,0,0,0.6); border-radius: 5px; z-index: 10; margin-bottom: 5px; }
+        #battle-field { width: 100%; flex: 1; display: flex; gap: 8px; position: relative; overflow: hidden; margin-bottom: 5px; }
+        .battle-side { flex: 1; display: flex; flex-direction: column; justify-content: flex-start; align-items: center; background: rgba(0,0,0,0.4); padding: 6px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden; }
+        .char-name { font-size: 13px; font-weight: bold; margin-bottom: 3px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; }
+        .hp-bar-container { width: 100%; height: 10px; background: #333; border-radius: 5px; overflow: hidden; margin-bottom: 3px; border: 1px solid #555; }
+        .hp-bar { width: 100%; height: 100%; background: #2ed573; transition: width 0.3s; }
+        .char-img-box { width: 100%; flex: 1; background: rgba(0,0,0,0.2); border-radius: 6px; overflow: hidden; display: flex; justify-content: center; align-items: center; position: relative; margin-bottom: 3px; min-height: 0; }
+        .char-img { height: 100%; width: 100%; object-fit: contain; } 
+        .msg-window { width: 100%; height: 60px; background: rgba(0,0,0,0.8); border: 1px solid #555; border-radius: 5px; padding: 4px; font-size: 11px; overflow-y: auto; line-height: 1.3; word-break: break-all; }
+        
+        #control-area { width: 100%; display: flex; flex-direction: column; gap: 6px; z-index: 10; padding: 2px 0; }
+        #battle-commands { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+        #battle-commands button { padding: 8px 3px; font-size: 12px; border-radius: 5px; }
+        #config-row { display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.5); padding: 3px 8px; border-radius: 5px; font-size: 11px; }
+        #config-btn { padding: 3px 6px; font-size: 10px; background: #747d8c; box-shadow: 0 1px #57606f; }
+
+        /* ADV（会話）共通ウィンドウ */
+        #dialogue-overlay { display: none; position: absolute; bottom: 10px; left: 10px; right: 10px; background: rgba(0, 0, 0, 0.9); border: 2px solid #ff4757; border-radius: 10px; padding: 15px; flex-direction: column; gap: 10px; z-index: 20; }
+        #dialogue-speaker { font-weight: bold; color: #ff6b81; font-size: 14px; border-bottom: 1px solid #444; padding-bottom: 3px; }
+        #dialogue-text { font-size: 14px; min-height: 48px; line-height: 1.4; white-space: pre-wrap; }
+        #dialogue-btn-area { display: flex; justify-content: flex-end; }
+
+        #clear-banner { display: none; position: absolute; top: 40%; left: 0; width: 100%; background: rgba(0,0,0,0.8); color: #ffd32a; font-size: 32px; font-weight: bold; text-align: center; padding: 20px 0; z-index: 30; letter-spacing: 4px; border-top: 3px solid #ffd32a; border-bottom: 3px solid #ffd32a; }
+
+        /* エピローグ（エンディング）専用縦並びレイアウト */
+        #epilogue-screen { justify-content: space-between; padding: 15px; }
+        .epilogue-event-container { width: 100%; flex: 1; display: flex; justify-content: center; align-items: center; min-height: 0; margin-bottom: 10px; }
+        .epilogue-event-img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.7); display: none; }
+        #epilogue-overlay { width: 100%; background: rgba(0, 0, 0, 0.85); border: 2px solid #ffd32a; border-radius: 10px; padding: 15px; display: flex; flex-direction: column; gap: 10px; z-index: 20; }
+
+        /* THE END 表示用スタイル */
+        .the-end-text { font-size: 36px; font-weight: bold; color: #ff3f34; text-align: center; letter-spacing: 6px; animation: fadeIn 1.5s ease-in-out; margin: 15px 0; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        /* 結果・ゲームオーバー */
+        .result-img { width: 150px; height: 150px; margin-bottom: 20px; background: #444; border-radius: 10px; }
+        
+        /* ポップアップ */
+        #config-overlay { display: none; position: absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100; justify-content:center; align-items:center; }
+        .modal { background:#2f3542; padding:20px; border-radius:10px; width:80%; text-align:center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        .config-item { margin: 20px 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+        .config-item label { font-size: 14px; font-weight: bold; color: #ff6b81; }
+        .volume-slider { width: 80%; accent-color: #ff4757; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <audio id="bgm-player" loop></audio>
+    <audio id="se-player"></audio>
+
+    <!-- 変更点：onclickを追加し、タップでタイトル画面に進むように修正 -->
+    <div id="logo-screen" class="screen active" onclick="changeScreen('title-screen')" style="cursor: pointer;">
+        <img class="logo-display-img" src="logo.png" alt="製作者ロゴ" onerror="this.style.display='none';">
+    </div>
+
+    <div id="title-screen" class="screen">
+        <img class="title-bg-img" src="image/タイトル.PNG" alt="タイトル背景" onerror="this.style.backgroundColor='#111';">
+        <button class="title-start-btn" onclick="startGameStartSequence()">START</button>
+    </div>
+
+    <div id="prologue-screen" class="screen">
+        <div class="prologue-title">PROLOGUE</div>
+        <div class="prologue-text-box">
+            <div id="prologue-text" class="prologue-text">あらすじ文章がここに入ります。</div>
+        </div>
+        <button style="width: 100%; letter-spacing: 2px;" onclick="changeScreen('tutorial-screen')">NEXT</button>
+    </div>
+
+    <div id="tutorial-screen" class="screen">
+        <div class="tutorial-title">HOW TO PLAY</div>
+        <div class="tutorial-list">
+            <div class="tutorial-item">
+                <div class="tutorial-item-header" style="color:#ff4757;">⚔️ 通常攻撃</div>
+                <div class="tutorial-item-desc">敵に安定したダメージを与えます。まずはこれを選んで敵のHPを削っていきましょう。</div>
+            </div>
+            <div class="tutorial-item">
+                <div class="tutorial-item-header" style="color:#2ed573;">🛡️ グレイズ</div>
+                <div class="tutorial-item-desc">敵の通常攻撃をかすり抜けて無効化し、さらに自身のHPを大きく回復します。ただし、特殊な「グレイズ不可攻撃」などには無力なので注意。</div>
+            </div>
+            <div class="tutorial-item">
+                <div class="tutorial-item-header" style="color:#ffd32a;">🌟 スペル</div>
+                <div class="tutorial-item-desc">敵に超大ダメージを与える切り札です。同時に、そのターンの敵からの攻撃を完全に無効化します。使用回数に制限があります。</div>
+            </div>
+        </div>
+        <button style="width: 100%; letter-spacing: 2px; background:#ffd32a; color:#000; box-shadow:0 4px #fed330; margin-top:15px;" onclick="changeScreen('char-select-screen')">NEXT</button>
+    </div>
+
+    <div id="char-select-screen" class="screen">
+        <div style="width:100%; display:flex; justify-content:space-between; align-items:center; margin-top:10px; margin-bottom:20px;">
+            <div style="width:50px;"></div>
+            <h2 style="color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.5); font-size: 22px; text-align:center;">CHARACTER SELECT</h2>
+            <button onclick="toggleConfig(true)" style="padding:4px 8px; font-size:11px; background:#747d8c; box-shadow:0 2px #57606f;">CONFIG</button>
+        </div>
+        <div id="char-list">
+        </div>
+    </div>
+
+    <div id="battle-screen" class="screen">
+        <div id="stage-info">STAGE 1</div>
+        <div id="battle-field">
+            <div class="battle-side" id="enemy-side">
+                <div class="char-name" id="enemy-name">敵キャラクター</div>
+                <div class="hp-bar-container"><div class="hp-bar" id="enemy-hp"></div></div>
+                <div class="char-img-box">
+                    <img id="enemy-avatar" class="char-img" src="" alt="敵画像" onerror="this.style.visibility='hidden';">
+                </div>
+                <div class="msg-window" id="enemy-msg">状況ログ...</div>
+            </div>
+
+            <div class="battle-side" id="player-side">
+                <div class="char-name" id="player-name">自機</div>
+                <div class="hp-bar-container"><div class="hp-bar" id="player-hp"></div></div>
+                <div class="char-img-box">
+                    <img id="player-avatar" class="char-img" src="" alt="自機画像" onerror="this.style.visibility='hidden';">
+                </div>
+                <div class="msg-window" id="player-msg">自機ログ...</div>
+            </div>
+        </div>
+
+        <div id="control-area">
+            <div id="battle-commands">
+                <button onclick="playerAction('attack')">通常攻撃</button>
+                <button onclick="playerAction('graze')">グレイズ</button>
+                <button id="spell-btn" onclick="playerAction('spell')">スペル</button>
+            </div>
+            <div id="config-row">
+                <span id="turn-display">TURN 1</span>
+                <button id="config-btn" onclick="toggleConfig(true)">CONFIG</button>
+            </div>
+        </div>
+
+        <div id="dialogue-overlay">
+            <div id="dialogue-speaker">名前</div>
+            <div id="dialogue-text">セリフ内容</div>
+            <div id="dialogue-btn-area">
+                <button id="dialogue-next-btn" onclick="advanceDialogue()" style="padding: 6px 16px; font-size:14px; box-shadow:none;">NEXT</button>
+            </div>
+        </div>
+
+        <div id="clear-banner">STAGE CLEAR</div>
+    </div>
+
+    <div id="epilogue-screen" class="screen">
+        <div class="epilogue-event-container">
+            <img id="epilogue-event-img" class="epilogue-event-img" src="" alt="イベントスチル" onerror="this.style.display='none';">
+        </div>
+        
+        <div id="epilogue-overlay">
+            <div id="epilogue-speaker" style="font-weight:bold; color:#ffd32a; font-size:15px; border-bottom:1px solid #444; padding-bottom:3px;">EPILOGUE</div>
+            <div id="epilogue-text" style="font-size:14px; min-height:60px; line-height:1.5;">エンディング文章</div>
+            <div style="display:flex; justify-content:flex-end;">
+                <button id="epilogue-next-btn" onclick="advanceEpilogue()" style="padding: 6px 16px; font-size:14px; background:#ffd32a; color:#000; box-shadow:0 4px #fed330;">NEXT</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-over-screen" class="screen">
+        <h2 style="color:#ff4757; font-size:32px; margin-bottom:20px;">GAME OVER</h2>
+        <img id="gameover-img" class="result-img" src="" alt="ゲームオーバーイラスト" onerror="this.style.display='none';">
+        <button onclick="returnToTitle()">TITLE RESTART</button>
+    </div>
+
+    <div id="config-overlay">
+        <div class="modal">
+            <h3>CONFIG</h3>
+            <div class="config-item">
+                <label for="bgm-volume">BGM & SE VOLUME (<span id="vol-value">50</span>%)</label>
+                <input type="range" id="bgm-volume" class="volume-slider" min="0" max="100" value="50" oninput="adjustVolume(this.value)">
+            </div>
+            <div class="config-item">
+                <label for="font-select">FONT STYLE</label>
+                <select id="font-select" onchange="changeFont(this.value)" style="padding:5px; font-size:14px; border-radius:5px; width:80%;">
+                    <option value="'Helvetica Neue', Arial, sans-serif">標準 (ゴシック体)</option>
+                    <option value="'Yu Mincho', 'MS PMincho', serif">明朝体</option>
+                    <option value="'Courier New', monospace">等幅フォント (レトロ調)</option>
+                    <option value="Impact, sans-serif">インパクト (太字)</option>
+                </select>
+            </div>
+            <button onclick="toggleConfig(false)">閉じる</button>
+        </div>
+    </div>
+</div>
+
+<script>
+// ==========================================
+// ★ マスターデータ ★
+// ==========================================
+const GAME_DATA = {
+    titleAndMenuBgm: "music/タイトル.mp3", 
+    charSelectBgImage: "url('assets/select_bg.png')", 
+    gameoverImage: "assets/gameover.png", 
+    commonDialogueBgm: "music/道中.mp3", 
+
+    epilogueBgmNormal: "audio/epilogue_normal.mp3", 
+    epilogueBgmEx: "audio/epilogue_ex.mp3",         
+
+    se: {
+        attack: "audio/se_attack.mp3",
+        graze: "audio/se_graze.mp3",  
+        spell: "audio/se_spell.mp3",  
+        damage: "audio/se_damage.mp3" 
+    },
+
+    prologue: {
+        bgImage: "url('assets/prologue_bg.png')", 
+        text: "幻想郷で突如大勢が神隠しに。\n\n人々は恐れ、慄き、平穏な生活を送れなくなっていた。\n\n博麗神社の巫女・博麗霊夢、そして魔法使い・霧雨魔理沙は、異変の出処突き止めるため、夕暮れの幻想郷に飛び込んで行く。\n\n幻想郷には笛の音が響いていた――。"
+    },
+
+    normalEpilogue: {
+        bgImage: "url('assets/bg_epilogue_normal.png')", 
+        textList: [
+            "こうして、紅魔館を包んでいた怪しい霧は完全に晴れ渡った。",
+            "博麗神社にはいつも通りの穏やかな、そして少し騒がしい日常が戻ってくる。",
+            "幻想郷に迫ったひとつの異変は解決した。\n―― NORMAL ROUTE END ――"
+        ]
+    },
+
+    exEpilogue: {
+        bgImage: "url('assets/bg_epilogue_ex.png')",       
+        eventImage: "assets/event_ex_still.png",         
+        textList: [
+            "地下に潜む、さらなる混沌の破壊衝動すらも二人の力でねじ伏せた。",
+            "本当の意味で、今回の異変に関わる全ての因果が解消されたのだ。",
+            "幻想郷の夜空に、美しい星々が瞬いている。\n―― EXTRA ROUTE TRUE END ――"
+        ]
+    },
+
+    players: [
+        {
+            id: "player1",
+            name: "博麗 霊夢",
+            avatarSelect: "image/霊夢セレクト.PNG", 
+            avatarNormal: "image/霊夢テスト.PNG", 
+            avatarTalk: "image/霊夢テスト.PNG", 
+            maxHp: 100,
+            lines: { attack: "そこっっっ！", graze: "見切った！", spell: "夢想封印ーー！！", damage: "くっっ！" }
+        },
+        {
+            id: "player2",
+            name: "霧雨 魔理沙",
+            avatarSelect: "image/魔理沙セレクト.PNG", 
+            avatarNormal: "image/魔理沙テスト.PNG", 
+            avatarTalk: "image/魔理沙テスト.PNG",
+            maxHp: 90,
+            lines: { attack: "狙い撃ちだぜ！", graze: "余裕！！", spell: "マスタースパークーー！！", damage: "ドジったぜ！" }
+        },
+        {
+            id: "player_ex",
+            name: "霊夢＆魔理沙 (EX)",
+            avatarSelect: "assets/ex_player_select.png", 
+            avatarNormal: "assets/ex_player_normal.png", 
+            avatarTalk: "assets/ex_player_talk.png",
+            maxHp: 120,
+            lines: { attack: "コンビネーション！", graze: "見切れるぜ！", spell: "連携スペル発動！！", damage: "しまっ…！？" }
+        }
+    ],
+
+    enemies: [
+        { 
+            stage: 1, name: "ルーミア", maxHp: 60, avatarNormal: "image/夜見テスト.PNG", avatarDefeated: "image/夜見テスト.PNG", avatarTalkDefeated: "image/夜見テスト.PNG", bgImage: "url('image/タイトル.PNG')", bgmBattle: "music/泣女用.mp3", lineSpell: "氷華",
+            talkBefore_player1: [
+                { speaker: 1, text: "なんで私なんですか？" },
+                { speaker: 0, text: "テストに使えそうなのがあなたしかいなかったそうよ" }、
+                { speaker: 1, text: "そんな理由で！？" }、
+                { speaker: 0, text: "悪いけど付き合ってもらうわ！" }
+            ],
+            talkAfter_player1: [
+                { speaker: 1, text: "なんて理不尽な..." },
+                { speaker: 0, text: "ホントなんか、ごめんなさい..." }
+            ],
+            talkBefore_player2: [
+                { speaker: 1, text: "あ、魔理沙さん" },
+                { speaker: 0, text: "悪いが、テストに付き合ってもらうぜ？" }、
+                 { speaker: 1, text: "なんの！？" },
+            ],
+            talkAfter_player2: [
+                { speaker: 1, text: "いきなりボコボコにされた..." },
+                { speaker: 0, text: "悪かったな..." }
+            ]
+        },
+        { 
+            stage: 2, name: "チルノ", maxHp: 80, avatarNormal: "assets/enemy2.png", avatarDefeated: "assets/enemy2_down.png", avatarTalkDefeated: "assets/enemy2_talk_down.png", bgImage: "url('assets/bg_stage2.png')", bgmBattle: "audio/battle_enemy2.mp3", lineSpell: "あたいは最強ね！",
+            talkBefore_player1: [{ speaker: 1, text: "あたいの縄張りに何の用よ！" }], talkAfter_player1: [{ speaker: 1, text: "あたいが負けるはずないのにー！" }],
+            talkBefore_player2: [{ speaker: 1, text: "冷たくしてやるんだから！" }], talkAfter_player2: [{ speaker: 0, text: "ちょっとは冷えたぜ。" }]
+        },
+        { 
+            stage: 3, name: "紅 美鈴", maxHp: 100, avatarNormal: "assets/enemy3.png", avatarDefeated: "assets/enemy3_down.png", avatarTalkDefeated: "assets/enemy3_talk_down.png", bgImage: "url('assets/bg_stage3.png')", bgmBattle: "audio/battle_enemy3.mp3", lineSpell: "ここを通すわけにはいきません！",
+            talkBefore_player1: [{ speaker: 1, text: "ここから先は紅魔館の敷地ですよ。" }], talkAfter_player1: [{ speaker: 1, text: "うぅ…申し訳ありません…" }],
+            talkBefore_player2: [{ speaker: 0, text: "門番さん、ちょっと通してくれ！" }], talkAfter_player2: [{ speaker: 0, text: "不法侵入成功だぜ！" }]
+        },
+        { 
+            stage: 4, name: "パチュリー", maxHp: 120, avatarNormal: "assets/enemy4.png", avatarDefeated: "assets/enemy4_down.png", avatarTalkDefeated: "assets/enemy4_talk_down.png", bgImage: "url('assets/bg_stage4.png')", bgmBattle: "audio/battle_enemy4.mp3", lineSpell: "動くと熱い火の粉が飛ぶわよ。",
+            talkBefore_player1: [{ speaker: 1, text: "邪魔者は排除するわ。" }], talkAfter_player1: [{ speaker: 1, text: "魔力が保たないわ…" }],
+            talkBefore_player2: [{ speaker: 1, text: "また私の本を盗みにきたの？" }], talkAfter_player2: [{ speaker: 0, text: "あとで読ませてもらうぜ！" }]
+        },
+        { 
+            stage: 5, name: "十六夜 咲夜", maxHp: 150, avatarNormal: "assets/enemy5.png", avatarDefeated: "assets/enemy5_down.png", avatarTalkDefeated: "assets/enemy5_talk_down.png", bgImage: "url('assets/bg_stage5.png')", bgmBattle: "audio/battle_enemy5.mp3", lineSpell: "私の世界についてこられるかしら？",
+            talkBefore_player1: [{ speaker: 1, text: "あなたの時間を止めて差し上げましょう。" }], talkAfter_player1: [{ speaker: 1, text: "お嬢様、お気をつけて…" }],
+            talkBefore_player2: [{ speaker: 0, text: "綺麗なナイフだな、ちょっと借りるぜ！" }], talkAfter_player2: [{ speaker: 1, text: "手癖の悪いネズミですね…" }]
+        },
+        { 
+            stage: 6, name: "レミリア", maxHp: 200, avatarNormal: "assets/enemy6.png", avatarDefeated: "assets/enemy6_down.png", avatarTalkDefeated: "assets/enemy6_talk_down.png", bgImage: "url('assets/bg_stage6.png')", bgmBattle: "audio/battle_enemy6.mp3", lineSpell: "紅い月の下で眠りなさい。",
+            talkBefore_player1: [{ speaker: 1, text: "あなたの運命を弄んであげる！" }], talkAfter_player1: [{ speaker: 1, text: "私の負けね…霧は晴らすわ。" }],
+            talkBefore_player2: [{ speaker: 1, text: "人間、私に勝てると思っているの？" }], talkAfter_player2: [{ speaker: 0, text: "弾幕はパワーだ！私の勝ちだな！" }]
+        }
+    ],
+
+    enemyEx: { 
+        stage: "EX", name: "フランドール", maxHp: 300, avatarNormal: "assets/enemy_ex.png", avatarDefeated: "assets/enemy_ex_down.png", avatarTalkDefeated: "assets/enemy_ex_talk_down.png", bgImage: "url('assets/bg_stage_ex.png')", bgmBattle: "audio/battle_ex.mp3", lineSpell: "きゅっとしてドカーン！",
+        talkBefore_player_ex: [{ speaker: 1, text: "あははは！私と楽しく壊し合いをしましょう！" }],
+        talkAfter_player_ex: [{ speaker: 1, text: "あー楽しかった！また遊んでね！" }]
+    }
+};
+
+// ==========================================
+// ★ ゲームシステム内部管理変数 ★
+// ==========================================
+let gameState = {
+    isExMode: false,
+    exUnlocked: false, 
+    selectedPlayer: null,
+    currentStageIdx: 0,
+    playerHp: 0,
+    enemyHp: 0,
+    playerMaxHp: 0,
+    enemyMaxHp: 0,
+    spellCount: 0, 
+    stage4SpellUsed: false, 
+    turnCount: 1,
+    enemyCharge: 0,
+    enemySpellUsed: false, 
+    dialoguePhase: 'before', 
+    dialogueIdx: 0,
+    epilogueIdx: 0,
+    currentVolume: 0.5
+};
+
+// 画面遷移処理
+function changeScreen(screenId) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    
+    const targetScreen = document.getElementById(screenId);
+    if (targetScreen) {
+        targetScreen.classList.add('active');
+    } else {
+        console.error("指定された画面が存在しません:", screenId);
+        return;
+    }
+    
+    if (screenId === 'title-screen' || screenId === 'prologue-screen' || screenId === 'tutorial-screen' || screenId === 'char-select-screen') {
+        playBGM(GAME_DATA.titleAndMenuBgm);
+    }
+
+    if(screenId === 'prologue-screen') initPrologue();
+    if(screenId === 'char-select-screen') initCharSelect();
+}
+
+// 変更点：自動遷移するrunProducerLogo関数を削除し、関連部分を整理しました。
+
+function startGameStartSequence() {
+    changeScreen('prologue-screen');
+}
+
+function initPrologue() {
+    const prologueScreen = document.getElementById('prologue-screen');
+    if (GAME_DATA.prologue.bgImage && GAME_DATA.prologue.bgImage !== "url('assets/prologue_bg.png')") {
+        prologueScreen.style.backgroundImage = GAME_DATA.prologue.bgImage;
+    } else {
+        prologueScreen.style.backgroundImage = "none";
+        prologueScreen.style.backgroundColor = "#000";
+    }
+    document.getElementById('prologue-text').innerText = GAME_DATA.prologue.text;
+}
+
+function initCharSelect() {
+    const selectScreen = document.getElementById('char-select-screen');
+    if(GAME_DATA.charSelectBgImage && GAME_DATA.charSelectBgImage !== "url('assets/select_bg.png')") {
+        selectScreen.style.backgroundImage = GAME_DATA.charSelectBgImage;
+    } else {
+        selectScreen.style.backgroundImage = "none";
+        selectScreen.style.backgroundColor = "#111";
+    }
+
+    const charList = document.getElementById('char-list');
+    charList.innerHTML = "";
+
+    const mainRow = document.createElement('div');
+    mainRow.id = "char-select-main-row";
+
+    GAME_DATA.players.forEach((p, idx) => {
+        if(p.id === "player_ex") return; 
+
+        const btn = document.createElement('div');
+        btn.className = "char-select-btn";
+        btn.onclick = () => selectCharacter(idx, false);
+
+        const img = document.createElement('img');
+        img.className = "char-select-btn-img";
+        img.src = p.avatarSelect; 
+        img.alt = p.name;
+        img.onerror = function() { this.style.display = 'none'; }; 
+        btn.appendChild(img);
+
+        const info = document.createElement('div');
+        info.className = "char-select-btn-info";
+        
+        const name = document.createElement('div');
+        name.className = "char-select-btn-name";
+        name.innerText = p.name;
+        info.appendChild(name);
+
+        const hp = document.createElement('div');
+        hp.className = "char-select-btn-hp";
+        hp.innerText = `MAX HP: ${p.maxHp}`;
+        info.appendChild(hp);
+
+        const hint = document.createElement('div');
+        hint.className = "char-select-btn-hint";
+        hint.innerText = `START`;
+        info.appendChild(hint);
+
+        btn.appendChild(info);
+        mainRow.appendChild(btn);
+    });
+
+    charList.appendChild(mainRow);
+
+    if(gameState.exUnlocked) {
+        const exRow = document.createElement('div');
+        exRow.id = "ex-select-btn-row";
+
+        const exBtn = document.createElement('div');
+        exBtn.className = "ex-select-btn";
+        exBtn.onclick = () => selectCharacter(2, true);
+
+        const icon = document.createElement('div');
+        icon.className = "ex-select-btn-icon";
+        icon.innerText = "★";
+        exBtn.appendChild(icon);
+
+        const textText = document.createElement('div');
+        textText.className = "ex-select-btn-text";
+
+        const name = document.createElement('div');
+        name.className = "ex-select-btn-name";
+        name.innerText = "EXTRA STAGE (EX)";
+        textText.appendChild(name);
+
+        const hint = document.createElement('div');
+        hint.className = "ex-select-btn-hint";
+        hint.innerText = `専用コンビネーション機で出撃`;
+        textText.appendChild(hint);
+
+        exBtn.appendChild(textText);
+        exRow.appendChild(exBtn);
+        charList.appendChild(exRow);
+    }
+}
+
+function adjustVolume(val) {
+    gameState.currentVolume = val / 100;
+    document.getElementById('bgm-player').volume = gameState.currentVolume;
+    const sePlayer = document.getElementById('se-player');
+    if (sePlayer) sePlayer.volume = gameState.currentVolume;
+    document.getElementById('vol-value').innerText = val;
+}
+
+// フォント変更処理
+function changeFont(fontFamily) {
+    document.body.style.fontFamily = fontFamily;
+}
+
+function selectCharacter(idx, isEx) {
+    gameState.selectedPlayer = GAME_DATA.players[idx];
+    gameState.isExMode = isEx;
+    gameState.currentStageIdx = 0;
+    gameState.stage4SpellUsed = false;
+    initStageData();
+    changeScreen('battle-screen');
+}
+
+function initStageData() {
+    const pData = gameState.selectedPlayer;
+    let eData = gameState.isExMode ? GAME_DATA.enemyEx : GAME_DATA.enemies[gameState.currentStageIdx];
+    if (!eData) return;
+
+    gameState.playerMaxHp = pData.maxHp;
+    gameState.playerHp = pData.maxHp;
+    gameState.enemyMaxHp = eData.maxHp;
+    gameState.enemyHp = eData.maxHp;
+    gameState.spellCount = 0; 
+    gameState.turnCount = 1;
+    gameState.enemyCharge = 0;
+    gameState.enemySpellUsed = false; 
+
+    document.getElementById('stage-info').innerText = gameState.isExMode ? "EXTRA STAGE" : `STAGE ${eData.stage}`;
+    document.getElementById('player-name').innerText = pData.name;
+    document.getElementById('enemy-name').innerText = eData.name;
+    
+    if (eData.bgImage && !eData.bgImage.includes('assets/')) {
+        document.getElementById('battle-screen').style.backgroundImage = eData.bgImage;
+    } else {
+        document.getElementById('battle-screen').style.backgroundImage = "none";
+        document.getElementById('battle-screen').style.backgroundColor = "#222";
+    }
+    
+    document.getElementById('player-avatar').src = pData.avatarNormal;
+    document.getElementById('enemy-avatar').src = eData.avatarNormal;
+    document.getElementById('player-msg').style.visibility = "hidden";
+    document.getElementById('enemy-msg').style.visibility = "hidden";
+    document.getElementById('control-area').style.pointerEvents = "none";
+    document.getElementById('control-area').style.opacity = "0.3";
+    document.getElementById('clear-banner').style.display = "none";
+
+    updateHpBars();
+    gameState.dialoguePhase = 'before';
+    gameState.dialogueIdx = 0;
+    playBGM(GAME_DATA.commonDialogueBgm); 
+    startDialoguePhase();
+}
+
+function startDialoguePhase() {
+    let eData = gameState.isExMode ? GAME_DATA.enemyEx : GAME_DATA.enemies[gameState.currentStageIdx];
+    const pId = gameState.selectedPlayer.id; 
+    
+    const propName = `${gameState.dialoguePhase === 'before' ? 'talkBefore' : 'talkAfter'}_${pId}`;
+    let currentTalkArray = eData[propName];
+    
+    if (!currentTalkArray || currentTalkArray.length === 0) {
+        endDialoguePart();
+        return;
+    }
+    
+    if (gameState.dialogueIdx < currentTalkArray.length) {
+        document.getElementById('dialogue-overlay').style.display = 'flex';
+        let talk = currentTalkArray[gameState.dialogueIdx];
+        
+        if(talk.speaker === 0) {
+            document.getElementById('dialogue-overlay').style.borderColor = "#ff4757";
+            document.getElementById('dialogue-speaker').innerText = gameState.selectedPlayer.name;
+            document.getElementById('player-avatar').src = gameState.selectedPlayer.avatarTalk;
+        } else {
+            document.getElementById('dialogue-overlay').style.borderColor = "#535c68";
+            document.getElementById('dialogue-speaker').innerText = eData.name;
+            
+            if (gameState.dialoguePhase === 'after') {
+                document.getElementById('enemy-avatar').src = eData.avatarTalkDefeated || eData.avatarDefeated;
+            } else {
+                document.getElementById('enemy-avatar').src = eData.avatarNormal;
+            }
+        }
+        document.getElementById('dialogue-text').innerText = talk.text;
+    } else {
+        endDialoguePart();
+    }
+}
+
+function endDialoguePart() {
+    document.getElementById('dialogue-overlay').style.display = 'none';
+    if (gameState.dialoguePhase === 'before') {
+        startActualBattle();
+    } else {
+        showStageClearBanner();
+    }
+}
+
+function advanceDialogue() {
+    gameState.dialogueIdx++;
+    startDialoguePhase();
+}
+
+function startActualBattle() {
+    let eData = gameState.isExMode ? GAME_DATA.enemyEx : GAME_DATA.enemies[gameState.currentStageIdx];
+    playBGM(eData.bgmBattle);
+    document.getElementById('player-avatar').src = gameState.selectedPlayer.avatarNormal;
+    document.getElementById('enemy-avatar').src = eData.avatarNormal;
+    document.getElementById('player-msg').style.visibility = "visible";
+    document.getElementById('enemy-msg').style.visibility = "visible";
+    document.getElementById('player-msg').innerText = "戦闘開始！アクションを選択してください。";
+    document.getElementById('enemy-msg').innerText = "相手の行動を警戒中...";
+    document.getElementById('control-area').style.pointerEvents = "auto";
+    document.getElementById('control-area').style.opacity = "1";
+    updateCommandButtons();
+}
+
+function showStageClearBanner() {
+    document.getElementById('clear-banner').style.display = "block";
+    document.getElementById('dialogue-overlay').style.display = 'flex';
+    document.getElementById('dialogue-speaker').innerText = "SYSTEM";
+    document.getElementById('dialogue-text').innerText = "ステージクリア！次のステップへ。";
+    const nextBtn = document.getElementById('dialogue-next-btn');
+    nextBtn.onclick = function() {
+        nextBtn.onclick = advanceDialogue;
+        proceedToNextStage();
+    };
+}
+
+function proceedToNextStage() {
+    if (gameState.isExMode) {
+        startEpiloguePhase();
+    } else {
+        if (gameState.currentStageIdx >= GAME_DATA.enemies.length - 1) {
+            startEpiloguePhase();
+        } else {
+            gameState.currentStageIdx++;
+            initStageData();
+        }
+    }
+}
+
+function startEpiloguePhase() {
+    gameState.epilogueIdx = 0;
+    const screen = document.getElementById('epilogue-screen');
+    const eventImg = document.getElementById('epilogue-event-img');
+    
+    if (gameState.isExMode) {
+        if(GAME_DATA.exEpilogue.bgImage && !GAME_DATA.exEpilogue.bgImage.includes('assets/')) screen.style.backgroundImage = GAME_DATA.exEpilogue.bgImage;
+        if(GAME_DATA.exEpilogue.eventImage) {
+            eventImg.src = GAME_DATA.exEpilogue.eventImage;
+            eventImg.style.display = "block";
+        }
+        playBGM(GAME_DATA.epilogueBgmEx);
+    } else {
+        if(GAME_DATA.normalEpilogue.bgImage && !GAME_DATA.normalEpilogue.bgImage.includes('assets/')) {
+            screen.style.backgroundImage = GAME_DATA.normalEpilogue.bgImage;
+        } else {
+            screen.style.backgroundImage = "none";
+            screen.style.backgroundColor = "#000";
+        }
+        eventImg.style.display = "none"; 
+        playBGM(GAME_DATA.epilogueBgmNormal);
+    }
+    
+    changeScreen('epilogue-screen');
+    updateEpilogueText();
+}
+
+function updateEpilogueText() {
+    const data = gameState.isExMode ? GAME_DATA.exEpilogue : GAME_DATA.normalEpilogue;
+    
+    if (gameState.epilogueIdx < data.textList.length) {
+        document.getElementById('epilogue-speaker').innerText = gameState.isExMode ? "EXTRA EPILOGUE" : "EPILOGUE";
+        document.getElementById('epilogue-text').innerText = data.textList[gameState.epilogueIdx];
+    } else if (gameState.epilogueIdx === data.textList.length) {
+        document.getElementById('epilogue-event-img').style.display = "none";
+        document.getElementById('epilogue-speaker').innerText = "SYSTEM";
+        document.getElementById('epilogue-text').innerHTML = `<div class="the-end-text">THE END</div>`;
+    } else {
+        if (!gameState.isExMode) {
+            gameState.exUnlocked = true;
+        }
+        returnToTitle();
+    }
+}
+
+function advanceEpilogue() {
+    gameState.epilogueIdx++;
+    updateEpilogueText();
+}
+
+// ==========================================
+// ★ バトルロジック ★
+// ==========================================
+function playerAction(action) {
+    const pData = gameState.selectedPlayer;
+    let eData = gameState.isExMode ? GAME_DATA.enemyEx : GAME_DATA.enemies[gameState.currentStageIdx];
+    
+    let pLog = "";
+    let eLog = "";
+    let enemyActionType = "normal"; 
+    
+    if (gameState.isExMode) {
+        gameState.enemyCharge++;
+        if (gameState.enemyCharge >= 3) {
+            enemyActionType = "spell";
+            gameState.enemyCharge = 0; 
+        } else {
+            enemyActionType = Math.random() < 0.5 ? "normal" : "noGraze";
+        }
+    } else {
+        if (gameState.enemyHp <= gameState.enemyMaxHp / 2 && !gameState.enemySpellUsed) {
+            enemyActionType = "spell";
+            gameState.enemySpellUsed = true; 
+        } else {
+            enemyActionType = Math.random() < 0.5 ? "normal" : "noGraze";
+        }
+    }
+
+    let playerAvatarSrc = pData.avatarNormal;
+    
+    // アクションに応じたSEの再生と処理
+    if (action === 'attack') {
+        playSE(GAME_DATA.se.attack);
+        pLog = `通常攻撃！`;
+        let dmg = Math.floor(gameState.enemyMaxHp / 5);
+        gameState.enemyHp -= dmg;
+    } 
+    else if (action === 'graze') {
+        playSE(GAME_DATA.se.graze);
+        pLog = `グレイズを選択！`;
+        playerAvatarSrc = pData.avatarTalk; 
+    } 
+    else if (action === 'spell') {
+        playSE(GAME_DATA.se.spell);
+        pLog = `スペル発動！`;
+        gameState.spellCount++;
+        let dmg = Math.floor(gameState.enemyMaxHp / 3);
+        gameState.enemyHp -= dmg;
+    }
+
+    if (gameState.enemyHp <= 0) {
+        gameState.enemyHp = 0;
+        updateHpBars();
+        document.getElementById('control-area').style.pointerEvents = "none";
+        document.getElementById('control-area').style.opacity = "0.3";
+        gameState.dialoguePhase = 'after';
+        gameState.dialogueIdx = 0;
+        playBGM(GAME_DATA.commonDialogueBgm); 
+        startDialoguePhase();
+        return;
+    }
+
+    if (action === 'spell') {
+        eLog = `スペルで敵攻撃を無効化した。`;
+    } 
+    else {
+        if (enemyActionType === 'normal') {
+            if (action === 'graze') {
+                let heal = Math.floor(gameState.playerMaxHp / 3);
+                gameState.playerHp = Math.min(gameState.playerMaxHp, gameState.playerHp + heal);
+                eLog = `敵通常攻撃をグレイズ！HP回復！`;
+            } else {
+                let dmg = Math.floor(gameState.playerMaxHp / 5);
+                gameState.playerHp -= dmg;
+                playerAvatarSrc = pData.avatarTalk; 
+                eLog = `通常攻撃被弾！ ${dmg} ダメージ`;
+                playSE(GAME_DATA.se.damage);
+            }
+        } 
+        else if (enemyActionType === 'noGraze') {
+            if (action === 'graze') {
+                let dmg = Math.floor(gameState.playerMaxHp / 4);
+                gameState.playerHp -= dmg;
+                playerAvatarSrc = pData.avatarTalk;
+                eLog = `グレイズ不可攻撃！被弾！ ${dmg} ダメージ`;
+                playSE(GAME_DATA.se.damage);
+            } else {
+                let dmg = Math.floor(gameState.playerMaxHp / 8);
+                gameState.playerHp -= dmg;
+                playerAvatarSrc = pData.avatarTalk;
+                eLog = `グレイズ不可攻撃を受撃。 ${dmg} ダメージ`;
+                playSE(GAME_DATA.se.damage);
+            }
+        } 
+        else if (enemyActionType === 'spell') {
+            eLog = `敵スペル発動！『${eData.lineSpell}』`;
+            if (gameState.isExMode) {
+                gameState.playerHp = 0;
+                eLog += ` グレイズ不可一撃必殺！`;
+                playSE(GAME_DATA.se.damage);
+            } else {
+                if (action === 'graze') {
+                    if (gameState.currentStageIdx === 4 || gameState.currentStageIdx === 5) { 
+                        let dmg = Math.floor(gameState.playerMaxHp / 4);
+                        gameState.playerHp -= dmg;
+                        playerAvatarSrc = pData.avatarTalk;
+                        eLog += ` グレイズ貫通！ ${dmg} ダメージ`;
+                        playSE(GAME_DATA.se.damage);
+                    } else {
+                        eLog += ` グレイズで無効化した！`;
+                    }
+                } else {
+                    let dmg = Math.floor(gameState.playerMaxHp / 3);
+                    gameState.playerHp -= dmg;
+                    playerAvatarSrc = pData.avatarTalk;
+                    eLog += ` 直撃！ ${dmg} ダメージ`;
+                    playSE(GAME_DATA.se.damage);
+                }
+            }
+        }
+    }
+
+    document.getElementById('player-avatar').src = playerAvatarSrc;
+    document.getElementById('player-msg').innerText = pLog;
+    document.getElementById('enemy-msg').innerText = eLog;
+
+    if (gameState.playerHp <= 0) {
+        gameState.playerHp = 0;
+        updateHpBars();
+        gameOver();
+        return;
+    }
+
+    gameState.turnCount++;
+    updateHpBars();
+    updateCommandButtons();
+}
+
+function updateHpBars() {
+    const pPercent = Math.max(0, (gameState.playerHp / gameState.playerMaxHp) * 100);
+    const ePercent = Math.max(0, (gameState.enemyHp / gameState.enemyMaxHp) * 100);
+    document.getElementById('player-hp').style.width = pPercent + "%";
+    document.getElementById('enemy-hp').style.width = ePercent + "%";
+    document.getElementById('turn-display').innerText = `TURN ${gameState.turnCount}`;
+}
+
+function updateCommandButtons() {
+    const spellBtn = document.getElementById('spell-btn');
+    const maxSpellAllowed = gameState.isExMode ? 2 : 1;
+    spellBtn.disabled = (gameState.spellCount >= maxSpellAllowed);
+}
+
+// BGM再生
+function playBGM(src) {
+    const bgm = document.getElementById('bgm-player');
+    if (!src || !bgm) return; 
+    
+    if (bgm.src && bgm.src.indexOf(src) !== -1) {
+        return; 
+    }
+    
+    try {
+        bgm.src = src;
+        bgm.volume = gameState.currentVolume; 
+        
+        let playPromise = bgm.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.warn("BGMファイルの読み込み、または再生がスキップされました:", error.message);
+            });
+        }
+    } catch (e) {
+        console.warn("BGM再生エラー:", e);
+    }
+}
+
+// SE再生
+function playSE(src) {
+    const sePlayer = document.getElementById('se-player');
+    if (!src || !sePlayer) return;
+    
+    try {
+        sePlayer.currentTime = 0;
+        sePlayer.src = src;
+        sePlayer.volume = gameState.currentVolume; 
+        
+        let playPromise = sePlayer.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.warn("SEの再生がスキップされました:", error.message);
+            });
+        }
+    } catch (e) {
+        console.warn("SE再生エラー:", e);
+    }
+}
+
+function gameOver() {
+    if(GAME_DATA.gameoverImage && !GAME_DATA.gameoverImage.includes('assets/')) {
+        document.getElementById('gameover-img').src = GAME_DATA.gameoverImage;
+    }
+    const bgm = document.getElementById('bgm-player');
+    if (bgm) bgm.pause(); 
+    changeScreen('game-over-screen');
+}
+
+// 変更点：タイトル画面に戻る処理を整理しました。
+function returnToTitle() {
+    const bgm = document.getElementById('bgm-player');
+    if (bgm) bgm.pause();
+    changeScreen('logo-screen');
+}
+
+function toggleConfig(show) {
+    document.getElementById('config-overlay').style.display = show ? 'flex' : 'none';
+}
+
+// 変更点：起動時の自動遷移を削除しました。
+window.onload = function() {
+    document.getElementById('bgm-volume').value = gameState.currentVolume * 100;
+};
+</script>
+</body>
+</html>
